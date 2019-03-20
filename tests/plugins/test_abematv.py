@@ -11,7 +11,11 @@ class TestPluginAbemaTV(unittest.TestCase):
             'https://abema.tv/channels/everybody-anime/slots/FJcUsdYjTk1rAb',
             'https://abema.tv/now-on-air/abema-news?a=b&c=d',
             'https://abema.tv/video/episode/90-1053_s99_p12?a=b&c=d',
-            'https://abema.tv/channels/abema-anime/slots/9rTULtcJFiFmM9?a=b'
+            'https://abema.tv/channels/abema-anime/slots/9rTULtcJFiFmM9?a=b',
+            'https://vod-abematv.akamaized.net/program/1234-sp_s1_1/playlist.m3u8',
+            'https://vod-abematv.akamaized.net/program/1234-sp_s1_1/1080/playlist.m3u8',
+            'https://linear-abematv.akamaized.net/channel/abema-news/playlist.m3u8',
+            'https://linear-abematv.akamaized.net/channel/abema-news/720/playlist.m3u8'
         ]
         for url in should_match:
             self.assertTrue(AbemaTV.can_handle_url(url))

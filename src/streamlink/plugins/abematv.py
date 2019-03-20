@@ -15,7 +15,7 @@ from requests import Response
 from requests.adapters import BaseAdapter
 
 from streamlink.exceptions import NoStreamsError
-from streamlink.plugin import Plugin
+from streamlink.plugin import Plugin, PluginArguments, PluginArgument
 from streamlink.plugin.api import useragents
 from streamlink.plugin.api import validate
 from streamlink.stream import HLSStream
@@ -41,10 +41,11 @@ class AbemaTVLicenseAdapter(BaseAdapter):
     _LICENSE_SCHEMA = validate.Schema({u"k": validate.text,
                                        u"cid": validate.text})
 
-    def __init__(self, session, deviceid, usertoken):
+    def __init__(self, session, deviceid, usertoken, key):
         self._session = session
         self.deviceid = deviceid
         self.usertoken = usertoken
+        self.key = key
         super(AbemaTVLicenseAdapter, self).__init__()
 
     def _get_videokey_from_ticket(self, ticket):
@@ -96,7 +97,10 @@ class AbemaTVLicenseAdapter(BaseAdapter):
         resp = Response()
         resp.status_code = 200
         ticket = re.findall(r"abematv-license://(.*)", request.url)[0]
-        resp._content = self._get_videokey_from_ticket(ticket)
+        if self.key:
+            resp._content = unhexlify(self.key)
+        else:
+            resp._content = self._get_videokey_from_ticket(ticket)
         return resp
 
     def close(self):
@@ -109,13 +113,24 @@ class AbemaTV(Plugin):
     Note: Streams are geo-restricted to Japan
 
     '''
+    arguments = PluginArguments(
+        PluginArgument("key",
+                       sensitive=False,
+                       metavar="KEY",
+                       help="""Video key (in HEX Format) for
+                       those used to be free""")
+    )
+
     _url_re = re.compile(r"""https://abema\.tv/(
         now-on-air/(?P<onair>[^\?]+)
         |
         video/episode/(?P<episode>[^\?]+)
         |
         channels/.+?/slots/(?P<slots>[^\?]+)
-        )""", re.VERBOSE)
+        )
+        |(?P<direct>https://(ds-vod|vod|linear)
+        -abematv\.akamaized\.net/
+        (channel|program)/[^\?]+(/\d+)?/playlist\.m3u8)""", re.VERBOSE)
 
     _CHANNEL = "https://api.abema.io/v1/channels"
 
@@ -213,6 +228,8 @@ class AbemaTV(Plugin):
         jsonres = self.session.http.json(res, schema=self._USER_SCHEMA)
         self.usertoken = jsonres['token']  # for authorzation
 
+        key = self.options.get("key")
+
         matchresult = self._url_re.match(self.url)
         if matchresult.group("onair"):
             onair = matchresult.group("onair")
@@ -227,23 +244,25 @@ class AbemaTV(Plugin):
             playlisturl = channel["playback"]["hls"]
         elif matchresult.group("episode"):
             episode = matchresult.group("episode")
-            if not self._is_playable("episode", episode):
+            if not self._is_playable("episode", episode) and not key:
                 log.error("Premium stream is not playable")
                 return {}
             playlisturl = self._PRGM3U8.format(episode)
         elif matchresult.group("slots"):
             slots = matchresult.group("slots")
-            if not self._is_playable("slots", slots):
+            if not self._is_playable("slots", slots) and not key:
                 log.error("Premium stream is not playable")
                 return {}
             playlisturl = self._SLOTM3U8.format(slots)
+        elif matchresult.group("direct"):
+            playlisturl = matchresult.group("direct")
 
         log.debug("URL={0}".format(playlisturl))
 
         # hook abematv private protocol
         self.session.http.mount("abematv-license://",
                                 AbemaTVLicenseAdapter(self.session, deviceid,
-                                                      self.usertoken))
+                                                      self.usertoken, key))
 
         streams = HLSStream.parse_variant_playlist(self.session, playlisturl)
         if not streams:
