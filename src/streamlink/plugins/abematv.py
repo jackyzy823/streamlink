@@ -55,7 +55,7 @@ class AbemaTVLicenseAdapter(BaseAdapter):
             "osLang": "ja_JP",
             "osTimezone": "Asia/Tokyo",
             "appId": "tv.abema",
-            "appVersion": "3.27.1"
+            "appVersion": "5.6.0"
         }
         auth_header = {"Authorization": "Bearer " + self.usertoken}
         res = self._session.http.get(self._MEDIATOKEN_API, params=params,
